@@ -1,0 +1,22 @@
+# ralph-engine hooks — TDD Strict template
+
+session_start:
+  steps: []
+
+work_item_start:
+  steps: []
+
+after_agent:
+  steps:
+    - name: "Specify tests"
+      run: "bash .specify/scripts/bash/tests/test-list-specs.sh"
+      required: true
+    - name: "Shell validation"
+      run: "bash -n .specify/scripts/bash/*.sh .specify/scripts/bash/tests/*.sh"
+      required: true
+
+work_item_finish:
+  steps: []
+
+session_end:
+  steps: []
