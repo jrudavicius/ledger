@@ -1,0 +1,3 @@
+# Route Customer-Facing Relationships Through Product Arrangements
+
+Customer-facing relationships target Product Arrangements rather than individual Ledger Accounts: Customers owns Arrangement Stakeholders, Payment Instruments links Payment Devices immutably to Arrangements, and Controls may restrict an Arrangement, a concrete Ledger Account, or a Payment Device. An Arrangement Freeze blocks named Product Capabilities without changing Arrangement or Account lifecycle or balance, while Account-level Reserve Amount effects remain separate availability constraints; this keeps multi-Asset arrangements coherent and prevents product semantics from leaking into Ledger posting directions.

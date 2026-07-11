@@ -1,0 +1,3512 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Candidate Ledger REST API",
+    "version": "0.1.0",
+    "summary": "Potential requests for the Ledger service",
+    "description": "Design-time contract for the Ledger service. Direct mutation endpoints are application-command ingress for authenticated Service Actors. Human Organization Operators and Platform Operators must use durable Command Requests. Source Reference correlates related activity; Idempotency-Key identifies exactly one mutation in the Organization and calling-client namespace. Accepted Transactions are immutable, balance independently per Asset, and keep service-assigned recordedAt separate from Organization-supplied effectiveAt.",
+    "license": {
+      "name": "Unlicensed",
+      "identifier": "LicenseRef-Unlicensed"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Deployment-relative API root"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Accounts",
+      "description": "Account opening, lifecycle, and immutable accounting dimensions."
+    },
+    {
+      "name": "Balances",
+      "description": "Current operational snapshots and bitemporal Posted Balances."
+    },
+    {
+      "name": "Transactions",
+      "description": "Immutable balanced activity, resolution, and correction requests."
+    },
+    {
+      "name": "Reconciliation",
+      "description": "Posted activity summaries by Account and Asset."
+    },
+    {
+      "name": "Audit Trail",
+      "description": "Attempt history and causally linked committed state changes."
+    },
+    {
+      "name": "Command Requests",
+      "description": "Durable, attributable human-operator intents and decisions."
+    }
+  ],
+  "x-actor-ingress": {
+    "directMutations": "Service Actors only",
+    "operatorMutations": "Durable Command Requests only",
+    "queries": "Authorized Service Actors and Operators"
+  },
+  "x-standard-error-statuses": {
+    "400": "Malformed request; Idempotency Key is not consumed.",
+    "401": "Authentication failed; Idempotency Key is not consumed.",
+    "403": "Authorization failed; Idempotency Key is not consumed.",
+    "404": "Scoped resource was not found or is hidden.",
+    "409": "Revision, lifecycle, approval, projection, or idempotency conflict. Idempotency consumption depends on the stable code; see x-idempotency-consumption.",
+    "422": "Stable authoritative business rejection; Idempotency Key is consumed for POST requests.",
+    "503": "Temporary unavailability; Idempotency Key is not consumed."
+  },
+  "x-idempotency-consumption": {
+    "consumesKey": [
+      "Accepted mutation outcomes",
+      "STALE_REVISION",
+      "ILLEGAL_ACCOUNT_TRANSITION",
+      "ILLEGAL_TRANSACTION_TRANSITION",
+      "ACCOUNT_CLOSURE_GATE_NOT_MET",
+      "REQUESTER_CANNOT_APPROVE",
+      "Other stable business rejections reached during authoritative evaluation"
+    ],
+    "doesNotConsumeKey": [
+      "MALFORMED_REQUEST",
+      "UNAUTHENTICATED",
+      "FORBIDDEN",
+      "IDEMPOTENCY_KEY_REUSED (the original binding remains consumed; no new binding is created)",
+      "PROJECTION_NOT_CURRENT",
+      "TEMPORARILY_UNAVAILABLE"
+    ]
+  },
+  "paths": {
+    "/v1/organizations/{organizationId}/ledgers/{ledgerId}/accounts/{accountId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrganizationId"
+        },
+        {
+          "$ref": "#/components/parameters/LedgerId"
+        },
+        {
+          "$ref": "#/components/parameters/AccountId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "getAccount",
+        "tags": [
+          "Accounts"
+        ],
+        "summary": "Read an Account",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MinimumConsistencyPosition"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AccountFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/organizations/{organizationId}/ledgers/{ledgerId}/accounts/{accountId}/balance-snapshot": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrganizationId"
+        },
+        {
+          "$ref": "#/components/parameters/LedgerId"
+        },
+        {
+          "$ref": "#/components/parameters/AccountId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "getBalanceSnapshot",
+        "tags": [
+          "Balances"
+        ],
+        "summary": "Read the current operational Balance Snapshot",
+        "description": "Returns current recorded state: Posted Balance, pending totals, Balance Floor, Reserve Amount effects, and nullable Available Balance. It does not answer a historical accounting question.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MinimumConsistencyPosition"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BalanceSnapshotFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/organizations/{organizationId}/ledgers/{ledgerId}/accounts/{accountId}/point-in-time-balance": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrganizationId"
+        },
+        {
+          "$ref": "#/components/parameters/LedgerId"
+        },
+        {
+          "$ref": "#/components/parameters/AccountId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "getPointInTimeBalance",
+        "tags": [
+          "Balances"
+        ],
+        "summary": "Read a bitemporal Posted Balance",
+        "description": "Returns Posted Balance through effectiveAt using only activity known by knownAt. knownAt defaults to current knowledge. Pending totals and availability are intentionally absent.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MinimumConsistencyPosition"
+          },
+          {
+            "$ref": "#/components/parameters/EffectiveAtCutoff"
+          },
+          {
+            "$ref": "#/components/parameters/KnownAtCutoff"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/PointInTimeBalanceFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/organizations/{organizationId}/ledgers/{ledgerId}/transactions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrganizationId"
+        },
+        {
+          "$ref": "#/components/parameters/LedgerId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "searchTransactions",
+        "tags": [
+          "Transactions"
+        ],
+        "summary": "Search immutable Ledger activity",
+        "description": "Orders by effectiveAt, recordedAt, and Transaction identifier.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MinimumConsistencyPosition"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageAfter"
+          },
+          {
+            "$ref": "#/components/parameters/TransactionIdFilter"
+          },
+          {
+            "$ref": "#/components/parameters/AccountFilter"
+          },
+          {
+            "$ref": "#/components/parameters/AssetFilter"
+          },
+          {
+            "$ref": "#/components/parameters/AmountFilter"
+          },
+          {
+            "$ref": "#/components/parameters/SourceReferenceFilter"
+          },
+          {
+            "$ref": "#/components/parameters/TransactionStateFilter"
+          },
+          {
+            "$ref": "#/components/parameters/EffectiveAtFrom"
+          },
+          {
+            "$ref": "#/components/parameters/EffectiveAtTo"
+          },
+          {
+            "$ref": "#/components/parameters/RecordedAtFrom"
+          },
+          {
+            "$ref": "#/components/parameters/RecordedAtTo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TransactionPageFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/organizations/{organizationId}/ledgers/{ledgerId}/transactions/{transactionId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrganizationId"
+        },
+        {
+          "$ref": "#/components/parameters/LedgerId"
+        },
+        {
+          "$ref": "#/components/parameters/TransactionId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "getTransaction",
+        "tags": [
+          "Transactions"
+        ],
+        "summary": "Read an immutable Transaction",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MinimumConsistencyPosition"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TransactionFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/organizations/{organizationId}/ledgers/{ledgerId}/reconciliation-summaries": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrganizationId"
+        },
+        {
+          "$ref": "#/components/parameters/LedgerId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "getReconciliationSummary",
+        "tags": [
+          "Reconciliation"
+        ],
+        "summary": "Summarize Posted activity by Account and Asset",
+        "description": "Returns exact total debits, total credits, and debit-minus-credit net movement over an Effective At interval, optionally limited to activity known by knownAt. Empty periods return an empty items array and zero aggregate counts.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MinimumConsistencyPosition"
+          },
+          {
+            "name": "effectiveAtFrom",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "effectiveAtTo",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/KnownAtCutoff"
+          },
+          {
+            "$ref": "#/components/parameters/AccountFilter"
+          },
+          {
+            "$ref": "#/components/parameters/AssetFilter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ReconciliationFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/organizations/{organizationId}/ledgers/{ledgerId}/audit-trail/actions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrganizationId"
+        },
+        {
+          "$ref": "#/components/parameters/LedgerId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "searchActionRecords",
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Search immutable Action Records",
+        "description": "Searches attempts, including successful reads, rejections, failures, authorization failures, and idempotent replays.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MinimumConsistencyPosition"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageAfter"
+          },
+          {
+            "name": "actorId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            }
+          },
+          {
+            "name": "authenticatedPrincipalId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            }
+          },
+          {
+            "name": "commandRequestId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/OutcomeCategory"
+            }
+          },
+          {
+            "name": "reasonCode",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ProblemCode"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "correlationId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "startedAtFrom",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "startedAtTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ActionRecordPageFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/organizations/{organizationId}/ledgers/{ledgerId}/audit-trail/actions/{actionId}/timeline": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrganizationId"
+        },
+        {
+          "$ref": "#/components/parameters/LedgerId"
+        },
+        {
+          "$ref": "#/components/parameters/ActionId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "getActionTimeline",
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Follow one action's causal history",
+        "description": "Joins the Action Record to its Command Request, State Change Records, change set, and links to authoritative domain records. Protected values remain redacted.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MinimumConsistencyPosition"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuditTimelineFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/organizations/{organizationId}/command-tasks": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrganizationId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "post": {
+        "operationId": "submitCommandTask",
+        "tags": [
+          "Command Tasks"
+        ],
+        "summary": "Submit a typed asynchronous Command Task",
+        "description": "The authenticated actor and represented Organization are derived by the service. Durable admission returns 202 with a polling location; approval, execution, and domain rejection are represented by subsequent Command Task states.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitCommandTask"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/CommandTaskAccepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "get": {
+        "operationId": "searchCommandTasks",
+        "tags": [
+          "Command Tasks"
+        ],
+        "summary": "Search Command Tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MinimumConsistencyPosition"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageAfter"
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/CommandRequestState"
+            }
+          },
+          {
+            "name": "requesterId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/CommandType"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/CommandRequestPageFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/organizations/{organizationId}/command-tasks/{commandTaskId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrganizationId"
+        },
+        {
+          "$ref": "#/components/parameters/CommandTaskId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "getCommandTask",
+        "tags": [
+          "Command Tasks"
+        ],
+        "summary": "Read Command Task state and history",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MinimumConsistencyPosition"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/CommandRequestFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Principal, Actor kind, calling client integration, and represented-Organization authority are established by the surrounding identity environment. Token format is intentionally unspecified."
+      }
+    },
+    "parameters": {
+      "OrganizationId": {
+        "name": "organizationId",
+        "in": "path",
+        "required": true,
+        "description": "Represented Organization. Authorization must bind this value to the authenticated principal.",
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      },
+      "LedgerId": {
+        "name": "ledgerId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      },
+      "AccountId": {
+        "name": "accountId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      },
+      "TransactionId": {
+        "name": "transactionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      },
+      "CommandRequestId": {
+        "name": "commandRequestId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      },
+      "ActionId": {
+        "name": "actionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Identity of exactly one mutation in the namespace shared by this Organization and authenticated calling client across all endpoints and Ledgers. A consumed key remains non-reusable for at least financial-record retention.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "example": "01J2TXN7M5R8N3E0Q4Y6W9K2AB"
+      },
+      "CorrelationId": {
+        "name": "X-Correlation-Id",
+        "in": "header",
+        "required": false,
+        "description": "Optional business-flow correlation. It is not retry identity.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "description": "Expected current revision token for the target subject. A mismatch returns STALE_REVISION.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      },
+      "MinimumConsistencyPosition": {
+        "name": "minimumConsistencyPosition",
+        "in": "query",
+        "required": false,
+        "description": "Opaque position returned by a successful mutation. The query either reaches it or returns PROJECTION_NOT_CURRENT.",
+        "schema": {
+          "$ref": "#/components/schemas/ConsistencyPosition"
+        }
+      },
+      "EffectiveAtCutoff": {
+        "name": "effectiveAt",
+        "in": "query",
+        "required": true,
+        "description": "Inclusive economic-time cutoff for Posted activity.",
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "KnownAtCutoff": {
+        "name": "knownAt",
+        "in": "query",
+        "required": false,
+        "description": "Inclusive Recorded At cutoff. Omission means current knowledge.",
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "PageSize": {
+        "name": "pageSize",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        }
+      },
+      "PageAfter": {
+        "name": "pageAfter",
+        "in": "query",
+        "required": false,
+        "description": "Opaque cursor from the prior page.",
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "AccountFilter": {
+        "name": "accountId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      },
+      "TransactionIdFilter": {
+        "name": "transactionId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      },
+      "AssetFilter": {
+        "name": "assetId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      },
+      "AmountFilter": {
+        "name": "amount",
+        "in": "query",
+        "required": false,
+        "description": "Exact Posting amount. Combine with assetId when the numeric text is not globally distinctive.",
+        "schema": {
+          "$ref": "#/components/schemas/PositiveDecimalAmount"
+        }
+      },
+      "SourceReferenceFilter": {
+        "name": "sourceReference",
+        "in": "query",
+        "required": false,
+        "description": "Business correlation; several related operations may share it.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      },
+      "TransactionStateFilter": {
+        "name": "state",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionState"
+        }
+      },
+      "EffectiveAtFrom": {
+        "name": "effectiveAtFrom",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "EffectiveAtTo": {
+        "name": "effectiveAtTo",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "RecordedAtFrom": {
+        "name": "recordedAtFrom",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "RecordedAtTo": {
+        "name": "recordedAtTo",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "CommandTaskId": {
+        "name": "commandTaskId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      }
+    },
+    "headers": {
+      "XActionId": {
+        "description": "Action Record for this attempt. A replay receives a new Action identifier.",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/OpaqueId"
+        }
+      },
+      "XConsistencyPosition": {
+        "description": "Opaque committed-history position of the returned mutation outcome.",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ConsistencyPosition"
+        }
+      },
+      "XCurrentThroughPosition": {
+        "description": "Opaque history position through which the returned projection is current.",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ConsistencyPosition"
+        }
+      },
+      "XCorrelationId": {
+        "description": "Caller-provided or server-generated correlation identifier.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "RetryAfter": {
+        "description": "Seconds the client should wait before polling the Command Task status resource again.",
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "required": true
+      },
+      "Location": {
+        "description": "Canonical URL of the admitted Command Task status resource.",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uri-reference"
+        }
+      }
+    },
+    "responses": {
+      "MutationCreated": {
+        "description": "A durable mutation outcome was created. Stable business rejection is represented as a Problem response, not as HTTP success.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Consistency-Position": {
+            "$ref": "#/components/headers/XConsistencyPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MutationResult"
+            }
+          }
+        }
+      },
+      "AccountFound": {
+        "description": "Account projection.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Current-Through-Position": {
+            "$ref": "#/components/headers/XCurrentThroughPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AccountResponse"
+            }
+          }
+        }
+      },
+      "BalanceSnapshotFound": {
+        "description": "Current operational Balance Snapshot.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Current-Through-Position": {
+            "$ref": "#/components/headers/XCurrentThroughPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/BalanceSnapshotResponse"
+            }
+          }
+        }
+      },
+      "PointInTimeBalanceFound": {
+        "description": "Bitemporal Posted Balance.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Current-Through-Position": {
+            "$ref": "#/components/headers/XCurrentThroughPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PointInTimeBalanceResponse"
+            }
+          }
+        }
+      },
+      "TransactionFound": {
+        "description": "Immutable Transaction projection.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Current-Through-Position": {
+            "$ref": "#/components/headers/XCurrentThroughPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/TransactionResponse"
+            }
+          }
+        }
+      },
+      "TransactionPageFound": {
+        "description": "Page of immutable Transactions.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Current-Through-Position": {
+            "$ref": "#/components/headers/XCurrentThroughPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/TransactionPageResponse"
+            }
+          }
+        }
+      },
+      "ReconciliationFound": {
+        "description": "Reconciliation summary.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Current-Through-Position": {
+            "$ref": "#/components/headers/XCurrentThroughPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ReconciliationResponse"
+            }
+          }
+        }
+      },
+      "ActionRecordPageFound": {
+        "description": "Page of Action Records.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Current-Through-Position": {
+            "$ref": "#/components/headers/XCurrentThroughPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ActionRecordPageResponse"
+            }
+          }
+        }
+      },
+      "AuditTimelineFound": {
+        "description": "Causally linked audit timeline.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Current-Through-Position": {
+            "$ref": "#/components/headers/XCurrentThroughPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuditTimelineResponse"
+            }
+          }
+        }
+      },
+      "CommandRequestFound": {
+        "description": "Command Request projection.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Current-Through-Position": {
+            "$ref": "#/components/headers/XCurrentThroughPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CommandRequestResponse"
+            }
+          }
+        }
+      },
+      "CommandRequestPageFound": {
+        "description": "Page of Command Requests.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Current-Through-Position": {
+            "$ref": "#/components/headers/XCurrentThroughPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CommandRequestPageResponse"
+            }
+          }
+        }
+      },
+      "Problem": {
+        "description": "Attempt failed, was rejected, or could not yet be served. X-Action-Id identifies this attempt when available, including replays and authentication failures.",
+        "headers": {
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            }
+          }
+        }
+      },
+      "CommandTaskAccepted": {
+        "description": "The Command Task was durably admitted for asynchronous approval and execution. This response is not a terminal domain outcome.",
+        "headers": {
+          "Location": {
+            "$ref": "#/components/headers/Location"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          },
+          "X-Action-Id": {
+            "$ref": "#/components/headers/XActionId"
+          },
+          "X-Consistency-Position": {
+            "$ref": "#/components/headers/XConsistencyPosition"
+          },
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/XCorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CommandTaskReceipt"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "OpaqueId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255,
+        "description": "Opaque identifier; clients must not parse structure from it."
+      },
+      "Revision": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255,
+        "description": "Opaque subject revision."
+      },
+      "ConsistencyPosition": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512,
+        "description": "Opaque committed-history or projection position."
+      },
+      "DecimalAmount": {
+        "type": "string",
+        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+        "description": "Exact signed decimal quantity. Asset precision determines permitted scale; JSON floating-point values are forbidden.",
+        "examples": [
+          "0",
+          "125.00",
+          "-50.125"
+        ]
+      },
+      "PositiveDecimalAmount": {
+        "type": "string",
+        "pattern": "^(?:0\\.(?=\\d*[1-9])\\d+|[1-9]\\d*(?:\\.\\d+)?)$",
+        "description": "Exact decimal quantity greater than zero at the Account Asset's permitted precision.",
+        "examples": [
+          "0.01",
+          "125",
+          "125.00"
+        ]
+      },
+      "NonNegativeDecimalAmount": {
+        "type": "string",
+        "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+        "description": "Exact decimal quantity greater than or equal to zero at the Account Asset's permitted precision.",
+        "examples": [
+          "0",
+          "0.00",
+          "125.00"
+        ]
+      },
+      "AccountRole": {
+        "type": "string",
+        "enum": [
+          "Customer",
+          "Internal"
+        ]
+      },
+      "NormalSide": {
+        "type": "string",
+        "enum": [
+          "Debit",
+          "Credit"
+        ],
+        "description": "Immutable Posting side that increases the Account's natural balance. It is independent of Account Role."
+      },
+      "AccountState": {
+        "type": "string",
+        "enum": [
+          "Pending",
+          "Opening",
+          "Open",
+          "Closing",
+          "Closed"
+        ],
+        "description": "Pending precedes opening work; Opening rejects ordinary Transactions; Open admits ordinary activity; Closing drains accepted work before terminal Closed."
+      },
+      "TransactionState": {
+        "type": "string",
+        "enum": [
+          "Pending",
+          "Posted",
+          "Resolved",
+          "Voided"
+        ]
+      },
+      "PostingSide": {
+        "type": "string",
+        "enum": [
+          "Debit",
+          "Credit"
+        ]
+      },
+      "OutcomeCategory": {
+        "type": "string",
+        "enum": [
+          "Accepted",
+          "PendingApproval",
+          "Approved",
+          "Executed",
+          "Rejected",
+          "Replayed",
+          "Cancelled",
+          "Expired",
+          "Failed"
+        ]
+      },
+      "MutationSuccessOutcome": {
+        "type": "string",
+        "enum": [
+          "Accepted",
+          "Executed",
+          "Replayed"
+        ],
+        "description": "Outcome of durably recording this HTTP mutation attempt, separate from the logical resource outcome."
+      },
+      "CommandRequestState": {
+        "type": "string",
+        "enum": [
+          "PendingApproval",
+          "Approved",
+          "Rejected",
+          "Executing",
+          "Executed",
+          "Failed",
+          "Cancelled",
+          "Expired"
+        ]
+      },
+      "CommandType": {
+        "type": "string",
+        "enum": [
+          "CreateAccount",
+          "BeginAccountOpening",
+          "CompleteAccountOpening",
+          "BeginAccountClosing",
+          "CompleteAccountClosure",
+          "ChangeBalanceFloor",
+          "ChangeBalanceCeiling",
+          "RecordTransaction",
+          "ResolveTransaction",
+          "VoidTransaction",
+          "ReplaceTransaction",
+          "ReverseTransaction",
+          "AdjustTransaction"
+        ]
+      },
+      "SubjectReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "Ledger",
+              "Account",
+              "Transaction",
+              "CommandRequest"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          }
+        }
+      },
+      "LedgerCommandTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "const": "Ledger"
+          },
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          }
+        }
+      },
+      "AccountCommandTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "const": "Account"
+          },
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          }
+        }
+      },
+      "TransactionCommandTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "const": "Transaction"
+          },
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          }
+        }
+      },
+      "AccountLifecycleTransitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "to",
+          "reason"
+        ],
+        "properties": {
+          "to": {
+            "type": "string",
+            "enum": [
+              "Closing",
+              "Closed"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "requestedEffectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PostingInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "side",
+          "amount"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "side": {
+            "$ref": "#/components/schemas/PostingSide"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/PositiveDecimalAmount"
+          }
+        },
+        "description": "The Account determines the Posting Asset. The request never supplies currency or an independently mutable Posting Asset."
+      },
+      "RecordTransactionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "initialState",
+          "sourceReference",
+          "effectiveAt",
+          "description",
+          "postings"
+        ],
+        "properties": {
+          "initialState": {
+            "type": "string",
+            "enum": [
+              "Pending",
+              "Posted"
+            ]
+          },
+          "sourceReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Business correlation, not retry identity or a uniqueness key."
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "For Posted activity this is economic time. For Pending activity this provisional field locates the commitment for period-close handling but is excluded from Point-in-Time Balance."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "postings": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/PostingInput"
+            }
+          }
+        },
+        "example": {
+          "initialState": "Posted",
+          "sourceReference": "order_8472",
+          "effectiveAt": "2026-07-10T12:00:00Z",
+          "description": "Capture order 8472",
+          "postings": [
+            {
+              "accountId": "acct_cash",
+              "side": "Debit",
+              "amount": "125.00"
+            },
+            {
+              "accountId": "acct_revenue",
+              "side": "Credit",
+              "amount": "125.00"
+            }
+          ]
+        }
+      },
+      "ReservationConsumption": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "assetId",
+          "amount"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "assetId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/PositiveDecimalAmount"
+          }
+        },
+        "description": "Account-and-Asset decrease claimed from the original Pending commitment."
+      },
+      "SettlementTransactionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceReference",
+          "effectiveAt",
+          "description",
+          "postings"
+        ],
+        "properties": {
+          "sourceReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Economic time for this linked Posted settlement; it cannot be later than recordedAt or on/before Ledger Closed Through."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "postings": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/PostingInput"
+            }
+          }
+        },
+        "description": "A linked Posted Transaction. Balancing Postings may differ from the original Pending Transaction. effectiveAt cannot be later than its server-assigned recordedAt and must be later than the Ledger Closed Through boundary."
+      },
+      "ContinuationTransactionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceReference",
+          "effectiveAt",
+          "description",
+          "postings"
+        ],
+        "properties": {
+          "sourceReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Provisional period-close placement for a Pending Continuation; it does not enter Posted historical balance."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "postings": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/PostingInput"
+            }
+          }
+        },
+        "description": "At most one linked Pending Transaction carrying unsettled commitment."
+      },
+      "ResolveTransactionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reservationConsumptions",
+          "settlements",
+          "reason"
+        ],
+        "anyOf": [
+          {
+            "properties": {
+              "settlements": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "required": [
+              "continuation"
+            ],
+            "properties": {
+              "continuation": {
+                "$ref": "#/components/schemas/ContinuationTransactionInput"
+              }
+            }
+          }
+        ],
+        "properties": {
+          "reservationConsumptions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ReservationConsumption"
+            }
+          },
+          "settlements": {
+            "type": "array",
+            "minItems": 0,
+            "items": {
+              "$ref": "#/components/schemas/SettlementTransactionInput"
+            }
+          },
+          "continuation": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ContinuationTransactionInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "description": "Settlement plus Continuation consumption cannot exceed the Pending Transaction's Resolution Limit. Continuation-only resolution may carry the full commitment forward; zero settlement without a Continuation is a Voiding. Uncovered decreases receive a fresh Availability Check."
+      },
+      "VoidTransactionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "ReplaceTransactionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "replacement",
+          "reason"
+        ],
+        "properties": {
+          "replacement": {
+            "$ref": "#/components/schemas/RecordTransactionRequest"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "CorrectionTransactionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceReference",
+          "effectiveAt",
+          "description",
+          "postings",
+          "reason"
+        ],
+        "description": "Creates a separate Posted correction Transaction. effectiveAt cannot be later than recordedAt or on/before Ledger Closed Through.",
+        "properties": {
+          "sourceReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "postings": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/PostingInput"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "ReverseTransactionRequest": {
+        "$ref": "#/components/schemas/CorrectionTransactionRequest"
+      },
+      "AdjustTransactionRequest": {
+        "$ref": "#/components/schemas/CorrectionTransactionRequest"
+      },
+      "ApprovalDecisionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "Approve",
+              "Reject"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "CancellationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "ExecutionAttemptRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "ActorReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actorId",
+          "kind",
+          "authenticatedPrincipalId"
+        ],
+        "properties": {
+          "actorId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ServiceActor",
+              "OrganizationOperator",
+              "PlatformOperator"
+            ]
+          },
+          "authenticatedPrincipalId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "representedOrganizationId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          }
+        }
+      },
+      "Posting": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "postingId",
+          "accountId",
+          "assetId",
+          "side",
+          "amount"
+        ],
+        "properties": {
+          "postingId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "assetId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "side": {
+            "$ref": "#/components/schemas/PostingSide"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/PositiveDecimalAmount"
+          }
+        }
+      },
+      "Account": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "ledgerId",
+          "name",
+          "assetId",
+          "accountRole",
+          "normalSide",
+          "accountState",
+          "revision",
+          "balanceFloor",
+          "balanceCeiling",
+          "createdAt"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "ledgerId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "assetId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "accountRole": {
+            "$ref": "#/components/schemas/AccountRole"
+          },
+          "normalSide": {
+            "$ref": "#/components/schemas/NormalSide"
+          },
+          "accountState": {
+            "$ref": "#/components/schemas/AccountState"
+          },
+          "balanceFloor": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DecimalAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "balanceCeiling": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DecimalAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "openedAt": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "openingStartedAt": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BalanceSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "assetId",
+          "recordedAt",
+          "postedBalance",
+          "pendingDebits",
+          "pendingCredits",
+          "reservedAmount",
+          "availableBalance",
+          "overFloor",
+          "overCeiling",
+          "balanceFloor",
+          "balanceCeiling"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "assetId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "postedBalance": {
+            "$ref": "#/components/schemas/DecimalAmount"
+          },
+          "pendingDebits": {
+            "$ref": "#/components/schemas/NonNegativeDecimalAmount"
+          },
+          "pendingCredits": {
+            "$ref": "#/components/schemas/NonNegativeDecimalAmount"
+          },
+          "balanceFloor": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DecimalAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "balanceCeiling": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DecimalAmount"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional upper natural-sign exposure bound. It does not change the downward Available Balance calculation."
+          },
+          "reservedAmount": {
+            "$ref": "#/components/schemas/NonNegativeDecimalAmount"
+          },
+          "availableBalance": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NonNegativeDecimalAmount"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the Account has no Balance Floor. A positive value is capacity, not operation permission."
+          },
+          "overFloor": {
+            "type": "boolean",
+            "description": "True when existing position or commitments exceed a newly tightened Balance Floor. Available Balance is then zero; accepted commitments remain valid."
+          },
+          "overCeiling": {
+            "type": "boolean",
+            "description": "True when existing exposure exceeds a newly tightened Balance Ceiling. New increases are blocked; existing exposure and accepted commitments remain valid."
+          }
+        }
+      },
+      "PointInTimeBalance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "assetId",
+          "effectiveAt",
+          "knownAt",
+          "postedBalance"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "assetId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "knownAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "postedBalance": {
+            "$ref": "#/components/schemas/DecimalAmount"
+          }
+        },
+        "description": "Posted-only accounting view. Pending totals, reservations, and Available Balance are intentionally absent."
+      },
+      "TransactionLinks": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "resolvedTransactionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "continuationTransactionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "replacementForTransactionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "reversesTransactionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "adjustsTransactionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "settlementTransactionIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpaqueId"
+            }
+          }
+        }
+      },
+      "Transaction": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "transactionId",
+          "ledgerId",
+          "state",
+          "sourceReference",
+          "description",
+          "effectiveAt",
+          "recordedAt",
+          "initiatedBy",
+          "revision",
+          "postings",
+          "links"
+        ],
+        "properties": {
+          "transactionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "ledgerId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "state": {
+            "$ref": "#/components/schemas/TransactionState"
+          },
+          "sourceReference": {
+            "type": "string",
+            "description": "Business correlation only; related operations may share it."
+          },
+          "description": {
+            "type": "string"
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Immutable service-assigned acceptance time and audit order."
+          },
+          "initiatedBy": {
+            "$ref": "#/components/schemas/ActorReference"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "postings": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/Posting"
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/TransactionLinks"
+          }
+        }
+      },
+      "ReconciliationItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accountId",
+          "assetId",
+          "normalSide",
+          "totalDebits",
+          "totalCredits",
+          "netMovement"
+        ],
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "assetId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "normalSide": {
+            "$ref": "#/components/schemas/NormalSide"
+          },
+          "totalDebits": {
+            "$ref": "#/components/schemas/NonNegativeDecimalAmount"
+          },
+          "totalCredits": {
+            "$ref": "#/components/schemas/NonNegativeDecimalAmount"
+          },
+          "netMovement": {
+            "$ref": "#/components/schemas/DecimalAmount",
+            "description": "Natural-sign movement: Debits minus Credits for Debit-normal Accounts; Credits minus Debits for Credit-normal Accounts."
+          }
+        }
+      },
+      "ActionRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "origin",
+          "action",
+          "startedAt",
+          "completedAt",
+          "outcome",
+          "correlationId",
+          "targets",
+          "sanitizedInput"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "External",
+              "System"
+            ]
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ActorReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authenticatedPrincipalId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "representedOrganizationId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "action": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/OutcomeCategory"
+          },
+          "reasonCode": {
+            "$ref": "#/components/schemas/ProblemCode"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectReference"
+            }
+          },
+          "sanitizedInput": {
+            "type": "object",
+            "description": "Explicitly audit-safe summary, redaction marker, or fingerprint.",
+            "additionalProperties": true
+          },
+          "replaysActionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          }
+        }
+      },
+      "StateChangeRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stateChangeId",
+          "subject",
+          "transition",
+          "previousRevision",
+          "resultingRevision",
+          "recordedAt",
+          "causingActionId",
+          "changeSetId",
+          "before",
+          "after"
+        ],
+        "properties": {
+          "stateChangeId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/SubjectReference"
+          },
+          "transition": {
+            "type": "string"
+          },
+          "previousRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "resultingRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "effectiveAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "causingActionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "changeSetId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "before": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Selected audit-safe values only."
+          },
+          "after": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Selected audit-safe values only."
+          }
+        }
+      },
+      "ApprovalRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "decision",
+          "decidedBy",
+          "decidedAt",
+          "reason"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "Approve",
+              "Reject"
+            ]
+          },
+          "decidedBy": {
+            "$ref": "#/components/schemas/ActorReference"
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "CommandTransitionRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "fromState",
+          "toState",
+          "transitionedAt"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "fromState": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CommandRequestState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null only for creation of the durable Command Request."
+          },
+          "toState": {
+            "$ref": "#/components/schemas/CommandRequestState"
+          },
+          "transitionedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/ActorReference"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/OutcomeCategory"
+          },
+          "reasonCode": {
+            "$ref": "#/components/schemas/ProblemCode"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "description": "One durable approval, rejection, cancellation, expiry, execution, or failure transition and its causing Action."
+      },
+      "CommandRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "commandRequestId",
+          "type",
+          "target",
+          "expectedRevision",
+          "justification",
+          "sanitizedParameters",
+          "idempotencyIdentity",
+          "requester",
+          "representedOrganizationId",
+          "requestedAt",
+          "state",
+          "revision",
+          "approvalDecisions",
+          "transitions"
+        ],
+        "properties": {
+          "commandRequestId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "type": {
+            "$ref": "#/components/schemas/CommandType"
+          },
+          "target": {
+            "$ref": "#/components/schemas/SubjectReference"
+          },
+          "expectedRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "justification": {
+            "type": "string"
+          },
+          "sanitizedParameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Only values approved for audit retention; redacted fields are represented explicitly."
+          },
+          "idempotencyIdentity": {
+            "type": "string",
+            "description": "Audit-safe identity or fingerprint of the consumed Idempotency Key, not necessarily the raw secret-bearing header value."
+          },
+          "requester": {
+            "$ref": "#/components/schemas/ActorReference"
+          },
+          "representedOrganizationId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestedEffectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "$ref": "#/components/schemas/CommandRequestState"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "approvalDecisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApprovalRecord"
+            }
+          },
+          "transitions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/CommandTransitionRecord"
+            }
+          },
+          "executor": {
+            "$ref": "#/components/schemas/ActorReference"
+          },
+          "finalOutcome": {
+            "$ref": "#/components/schemas/OutcomeCategory"
+          },
+          "resultingChangeSetId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          }
+        }
+      },
+      "PageInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pageSize"
+        ],
+        "properties": {
+          "pageSize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "nextPageAfter": {
+            "type": "string"
+          }
+        }
+      },
+      "MutationResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "outcome",
+          "logicalOutcome",
+          "message",
+          "replayed",
+          "consistencyPosition",
+          "resource"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId",
+            "description": "Action Record for this attempt, including when the logical result is replayed."
+          },
+          "originalActionId": {
+            "$ref": "#/components/schemas/OpaqueId",
+            "description": "Original attempt whose logical result is returned on replay."
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/MutationSuccessOutcome"
+          },
+          "logicalOutcome": {
+            "$ref": "#/components/schemas/OutcomeCategory",
+            "description": "Logical result or resulting resource state. A successfully recorded Reject decision therefore has outcome Executed and logicalOutcome Rejected."
+          },
+          "message": {
+            "type": "string"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "consistencyPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/SubjectReference"
+          },
+          "commandRequestId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "changeSetId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          }
+        }
+      },
+      "AccountResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "currentThroughPosition",
+          "account"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "account": {
+            "$ref": "#/components/schemas/Account"
+          }
+        }
+      },
+      "BalanceSnapshotResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "currentThroughPosition",
+          "balanceSnapshot"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "balanceSnapshot": {
+            "$ref": "#/components/schemas/BalanceSnapshot"
+          }
+        }
+      },
+      "PointInTimeBalanceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "currentThroughPosition",
+          "pointInTimeBalance"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "pointInTimeBalance": {
+            "$ref": "#/components/schemas/PointInTimeBalance"
+          }
+        }
+      },
+      "TransactionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "currentThroughPosition",
+          "transaction"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/Transaction"
+          }
+        }
+      },
+      "TransactionPageResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "currentThroughPosition",
+          "items",
+          "page"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transaction"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
+        }
+      },
+      "ReconciliationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "currentThroughPosition",
+          "effectiveAtFrom",
+          "effectiveAtTo",
+          "knownAt",
+          "items"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "effectiveAtFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveAtTo": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "knownAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReconciliationItem"
+            }
+          }
+        }
+      },
+      "ActionRecordPageResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "currentThroughPosition",
+          "items",
+          "page"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionRecord"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
+        }
+      },
+      "AuditTimelineResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "currentThroughPosition",
+          "rootAction",
+          "actions",
+          "stateChanges",
+          "authoritativeRecords"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "rootAction": {
+            "$ref": "#/components/schemas/ActionRecord"
+          },
+          "actions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ActionRecord"
+            },
+            "description": "Every causally related submission, decision, cancellation, expiry, and execution Action so each State Change causingActionId is resolvable."
+          },
+          "commandRequest": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CommandRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stateChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StateChangeRecord"
+            }
+          },
+          "authoritativeRecords": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectReference"
+            }
+          }
+        }
+      },
+      "CommandRequestResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "currentThroughPosition",
+          "commandRequest"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "commandRequest": {
+            "$ref": "#/components/schemas/CommandRequest"
+          }
+        }
+      },
+      "CommandRequestPageResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actionId",
+          "currentThroughPosition",
+          "items",
+          "page"
+        ],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandRequest"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
+        }
+      },
+      "ProblemCode": {
+        "type": "string",
+        "enum": [
+          "MALFORMED_REQUEST",
+          "VALIDATION_FAILED",
+          "UNAUTHENTICATED",
+          "FORBIDDEN",
+          "NOT_FOUND",
+          "STALE_REVISION",
+          "IDEMPOTENCY_KEY_REUSED",
+          "TOO_FEW_POSTINGS",
+          "INVALID_AMOUNT",
+          "ASSET_PRECISION_EXCEEDED",
+          "CROSS_LEDGER_POSTING",
+          "ACCOUNT_NOT_POSTABLE",
+          "ACCOUNT_CLOSING",
+          "ACCOUNT_CLOSURE_GATE_NOT_MET",
+          "CLOSED_ACCOUNT_CORRECTION_NOT_ZERO",
+          "INVALID_BALANCE_INTERVAL",
+          "ACCOUNT_OVER_CEILING",
+          "BALANCE_CEILING_EXCEEDED",
+          "TRANSACTION_UNBALANCED_BY_ASSET",
+          "FUTURE_EFFECTIVE_POSTING",
+          "LEDGER_PERIOD_CLOSED",
+          "AVAILABILITY_EXCEEDED",
+          "OPERATION_BLOCKED_BY_RESTRICTION",
+          "ILLEGAL_ACCOUNT_TRANSITION",
+          "ILLEGAL_TRANSACTION_TRANSITION",
+          "RESOLUTION_LIMIT_EXCEEDED",
+          "APPROVAL_REQUIRED",
+          "APPROVER_INELIGIBLE",
+          "REQUESTER_CANNOT_APPROVE",
+          "COMMAND_REJECTED",
+          "COMMAND_CANCELLED",
+          "COMMAND_EXPIRED",
+          "COMMAND_ALREADY_FINAL",
+          "PROJECTION_NOT_CURRENT",
+          "QUERY_DEFERRED",
+          "EXECUTION_FAILED",
+          "TEMPORARILY_UNAVAILABLE"
+        ]
+      },
+      "FieldViolation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "message"
+        ],
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "detail",
+          "correlationId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "code": {
+            "$ref": "#/components/schemas/ProblemCode"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "actionId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "fieldViolations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldViolation"
+            }
+          },
+          "target": {
+            "$ref": "#/components/schemas/SubjectReference"
+          },
+          "currentRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "minimumConsistencyPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "currentThroughPosition": {
+            "$ref": "#/components/schemas/ConsistencyPosition"
+          },
+          "closedThrough": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Current Ledger Effective At close boundary when relevant."
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "idempotencyKeyConsumed": {
+            "type": "boolean",
+            "description": "Present on mutating failures when the service can state whether this attempt created a durable consumed-key binding."
+          }
+        }
+      },
+      "ChangeBalanceFloorParameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "balanceFloor"
+        ],
+        "properties": {
+          "balanceFloor": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DecimalAmount"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provisional operator-only intent. Null removes the floor and makes Available Balance not applicable. The change takes effect only at execution Recorded At, cannot exceed an existing Balance Ceiling, and never rewrites existing exposure or accepted commitments."
+          }
+        }
+      },
+      "ChangeBalanceCeilingParameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "balanceCeiling"
+        ],
+        "properties": {
+          "balanceCeiling": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DecimalAmount"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null removes the upper bound. The change takes effect only at execution Recorded At, cannot fall below an existing Balance Floor, and never rewrites existing exposure or accepted commitments."
+          }
+        }
+      },
+      "ChangeBalanceFloorCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target",
+          "parameters"
+        ],
+        "properties": {
+          "type": {
+            "const": "ChangeBalanceFloor"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AccountCommandTarget"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ChangeBalanceFloorParameters"
+          }
+        }
+      },
+      "ChangeBalanceCeilingCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target",
+          "parameters"
+        ],
+        "properties": {
+          "type": {
+            "const": "ChangeBalanceCeiling"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AccountCommandTarget"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ChangeBalanceCeilingParameters"
+          }
+        }
+      },
+      "RecordTransactionCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target",
+          "parameters"
+        ],
+        "properties": {
+          "type": {
+            "const": "RecordTransaction"
+          },
+          "target": {
+            "$ref": "#/components/schemas/LedgerCommandTarget",
+            "description": "Target Ledger."
+          },
+          "requestedEffectiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Scheduling intent, distinct from the Transaction parameters effectiveAt."
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/RecordTransactionRequest"
+          }
+        }
+      },
+      "ResolveTransactionCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target",
+          "parameters"
+        ],
+        "properties": {
+          "type": {
+            "const": "ResolveTransaction"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TransactionCommandTarget",
+            "description": "Target Pending Transaction."
+          },
+          "requestedEffectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ResolveTransactionRequest"
+          }
+        }
+      },
+      "VoidTransactionCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target",
+          "parameters"
+        ],
+        "properties": {
+          "type": {
+            "const": "VoidTransaction"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TransactionCommandTarget",
+            "description": "Target Pending Transaction."
+          },
+          "requestedEffectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/VoidTransactionRequest"
+          }
+        }
+      },
+      "ReplaceTransactionCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target",
+          "parameters"
+        ],
+        "properties": {
+          "type": {
+            "const": "ReplaceTransaction"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TransactionCommandTarget",
+            "description": "Target Voided Pending Transaction."
+          },
+          "requestedEffectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ReplaceTransactionRequest"
+          }
+        }
+      },
+      "ReverseTransactionCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target",
+          "parameters"
+        ],
+        "properties": {
+          "type": {
+            "const": "ReverseTransaction"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TransactionCommandTarget",
+            "description": "Target Transaction."
+          },
+          "requestedEffectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ReverseTransactionRequest"
+          }
+        }
+      },
+      "AdjustTransactionCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target",
+          "parameters"
+        ],
+        "properties": {
+          "type": {
+            "const": "AdjustTransaction"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TransactionCommandTarget",
+            "description": "Target Transaction."
+          },
+          "requestedEffectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/AdjustTransactionRequest"
+          }
+        }
+      },
+      "CommandTaskReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "commandTaskId",
+          "state",
+          "statusUrl"
+        ],
+        "properties": {
+          "commandTaskId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "state": {
+            "type": "string"
+          },
+          "statusUrl": {
+            "type": "string",
+            "format": "uri-reference"
+          }
+        }
+      },
+      "CreateAccountParameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Creates the Account in Pending with immutable Asset, Account Role, and Normal Side. State is never caller-selected.",
+        "required": [
+          "name",
+          "assetId",
+          "accountRole",
+          "normalSide"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "assetId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "accountRole": {
+            "$ref": "#/components/schemas/AccountRole"
+          },
+          "normalSide": {
+            "$ref": "#/components/schemas/NormalSide"
+          },
+          "balanceFloor": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DecimalAmount"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null means unconstrained. Scale must match the immutable Asset."
+          },
+          "balanceCeiling": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DecimalAmount"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional highest natural-sign exposure. Omission or null means no upper bound. When both bounds exist, balanceFloor cannot exceed balanceCeiling."
+          }
+        },
+        "example": {
+          "name": "Customer funds",
+          "assetId": "asset_eur",
+          "accountRole": "Customer",
+          "normalSide": "Credit",
+          "balanceFloor": "0.00"
+        }
+      },
+      "CreateAccountCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target",
+          "parameters"
+        ],
+        "properties": {
+          "type": {
+            "const": "CreateAccount"
+          },
+          "target": {
+            "$ref": "#/components/schemas/LedgerCommandTarget"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/CreateAccountParameters"
+          }
+        }
+      },
+      "BeginAccountOpeningCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target"
+        ],
+        "properties": {
+          "type": {
+            "const": "BeginAccountOpening"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AccountCommandTarget"
+          }
+        }
+      },
+      "CompleteAccountOpeningCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target"
+        ],
+        "properties": {
+          "type": {
+            "const": "CompleteAccountOpening"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AccountCommandTarget"
+          }
+        }
+      },
+      "BeginAccountClosingCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target"
+        ],
+        "properties": {
+          "type": {
+            "const": "BeginAccountClosing"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AccountCommandTarget"
+          }
+        }
+      },
+      "CompleteAccountClosureCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "target"
+        ],
+        "properties": {
+          "type": {
+            "const": "CompleteAccountClosure"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AccountCommandTarget"
+          }
+        }
+      },
+      "SemanticCommand": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CreateAccountCommand"
+          },
+          {
+            "$ref": "#/components/schemas/BeginAccountOpeningCommand"
+          },
+          {
+            "$ref": "#/components/schemas/CompleteAccountOpeningCommand"
+          },
+          {
+            "$ref": "#/components/schemas/BeginAccountClosingCommand"
+          },
+          {
+            "$ref": "#/components/schemas/CompleteAccountClosureCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ChangeBalanceFloorCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ChangeBalanceCeilingCommand"
+          },
+          {
+            "$ref": "#/components/schemas/RecordTransactionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResolveTransactionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/VoidTransactionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ReplaceTransactionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ReverseTransactionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/AdjustTransactionCommand"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "CreateAccount": "#/components/schemas/CreateAccountCommand",
+            "BeginAccountOpening": "#/components/schemas/BeginAccountOpeningCommand",
+            "CompleteAccountOpening": "#/components/schemas/CompleteAccountOpeningCommand",
+            "BeginAccountClosing": "#/components/schemas/BeginAccountClosingCommand",
+            "CompleteAccountClosure": "#/components/schemas/CompleteAccountClosureCommand",
+            "ChangeBalanceFloor": "#/components/schemas/ChangeBalanceFloorCommand",
+            "ChangeBalanceCeiling": "#/components/schemas/ChangeBalanceCeilingCommand",
+            "RecordTransaction": "#/components/schemas/RecordTransactionCommand",
+            "ResolveTransaction": "#/components/schemas/ResolveTransactionCommand",
+            "VoidTransaction": "#/components/schemas/VoidTransactionCommand",
+            "ReplaceTransaction": "#/components/schemas/ReplaceTransactionCommand",
+            "ReverseTransaction": "#/components/schemas/ReverseTransactionCommand",
+            "AdjustTransaction": "#/components/schemas/AdjustTransactionCommand"
+          }
+        }
+      },
+      "ExpectedRevision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subject",
+          "revision"
+        ],
+        "properties": {
+          "subject": {
+            "$ref": "#/components/schemas/SubjectReference"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          }
+        }
+      },
+      "SubmitCommandTask": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "command",
+          "expectedRevisions",
+          "justification"
+        ],
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/SemanticCommand"
+          },
+          "expectedRevisions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ExpectedRevision"
+            }
+          },
+          "justification": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

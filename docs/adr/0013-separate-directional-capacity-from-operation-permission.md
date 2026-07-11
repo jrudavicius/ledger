@@ -1,0 +1,3 @@
+# Separate Directional Capacity from Operation Permission
+
+Ledger exposes Decrease Capacity against a Balance Floor and Increase Capacity against a Balance Ceiling as separate informative projections. A direction without its corresponding bound has no applicable capacity value. Controls independently evaluates Block Operation Restrictions, so positive capacity never grants permission and a blocked operation does not alter either capacity. Journal's authoritative Availability Check enforces current bounds and applicable Controls atomically when accepting a Transaction; it does not rely on the query projections.

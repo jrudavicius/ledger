@@ -1,0 +1,3 @@
+# Bind Arrangements to Immutable Product Definitions
+
+Every Product Arrangement binds to an exact, version-addressed Product Definition whose rules, capabilities, Ledger Account Blueprint, and default terms are immutable. Publishing another definition does not change existing arrangements or reinterpret materialized Ledger Account facts, accepted-operation Account resolutions, Postings, or balances; adopting it requires an explicit migration that preserves the prior binding and history. This trades automatic rollout for deterministic product behavior, stable retries, and an auditable explanation of the rules governing each arrangement and operation.
