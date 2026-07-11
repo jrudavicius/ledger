@@ -1,7 +1,6 @@
 ---
 name: "speckit-specify"
-description: "Create or update the feature specification from a natural language feature description."
-compatibility: "Requires spec-kit project structure with .specify/ directory"
+description: "Create or update a feature specification from a natural language description after reconciling every canonical spec and supporting repository knowledge artifact."
 metadata:
   author: "github-spec-kit"
   source: "templates/commands/specify.md"
@@ -52,19 +51,30 @@ You **MUST** consider the user input before proceeding (if not empty).
     After emitting the block above you MUST actually invoke the hook and wait for it to finish before continuing. Run it the same way you would run the command yourself in this agent/session (the invocation may differ from the literal `{command}` id shown above, e.g. a skills-mode agent runs it as `/skill:speckit-...` or `$speckit-...`). Emitting the block alone does not run the hook.
 - If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
 
-## Repository Specification Context
+## Repository Knowledge Context
 
-Before creating or modifying a feature directory, discover the complete set of existing feature specifications:
+Before creating or modifying a feature directory, discover the complete repository knowledge corpus that can constrain a specification:
 
 1. Run `bash .specify/scripts/bash/list-specs.sh --json` once from the repository root.
-2. Parse `SPEC_FILES` and retain the returned, deterministically ordered list as `SPEC_CONTEXT_FILES`.
-3. Read every file in `SPEC_CONTEXT_FILES` completely. Do not sample, truncate, select only the active feature, or silently skip an unreadable file. If discovery fails or a returned file cannot be read, stop with a clear error naming the file.
-4. Build an internal inventory for each specification: path, scope, actors, entities, invariants, dependencies, exclusions, and status when explicitly stated.
-5. Use the inventory to preserve shared terminology, avoid duplicate or contradictory requirements, and identify dependencies and overlaps. Existing specifications are context, not permission to merge unrelated feature scopes.
+2. Parse `SPEC_FILES` as the deterministically ordered `SPEC_CONTEXT_FILES` list of canonical specifications.
+3. Parse `SUPPORT_FILES` as the deterministically ordered `SUPPORT_CONTEXT_FILES` list of contracts, checklists, plans, research, domain models, context definitions, decisions, governance, and other authored repository documentation.
+4. Read every file in both lists completely with a format-appropriate reader. Read large files in consecutive chunks until EOF. Do not sample, truncate, rely on search snippets, select only the active feature, or silently skip an unreadable or unsupported file. If discovery fails or any returned file cannot be fully read, stop with a clear error naming the file.
+5. Build an internal inventory for each canonical specification: path, scope, actors, entities, invariants, dependencies, exclusions, and explicitly stated status.
+6. Build an internal inventory for each supporting artifact: path, artifact type, scope, canonical terms, decisions or constraints, explicitly stated status, and relationships to specifications or other artifacts.
+7. Reconcile the inventories before writing. Preserve shared terminology, surface duplicate or contradictory requirements, and identify dependencies and overlaps.
 
-An empty `SPEC_FILES` list is valid and requires no special handling. Discovery MUST happen before the target `spec.md` is created so a newly copied template is never mistaken for prior specification context.
+Treat sources according to their role:
 
-After `SPECIFY_FEATURE_DIRECTORY` is resolved and before creating or copying `spec.md`, read any existing target specification that is not already in `SPEC_CONTEXT_FILES`, append it to the inventory, and treat it as the editable baseline. Classify every other discovered file as read-only peer context. Never modify a peer specification during this command. If the requested feature conflicts materially with an existing specification, capture the conflict explicitly and use a `[NEEDS CLARIFICATION: ...]` marker when no safe default exists.
+- The target specification is the editable requirements baseline.
+- Peer specifications are read-only requirements context; their contents do not authorize merging unrelated feature scopes.
+- The constitution supplies governance constraints.
+- Domain models, context definitions, and accepted decisions supply established terminology and constraints.
+- Contracts, plans, tasks, research, checklists, and other supporting artifacts supply evidence and may reveal drift, but they do not silently create or override requirements.
+- Explicit status and scope determine authority. Directory numbering, modification time, and filename recency do not.
+
+Empty discovery lists are valid. Discovery MUST happen before the target `spec.md` is created so a newly copied template is never mistaken for prior context.
+
+After `SPECIFY_FEATURE_DIRECTORY` is resolved and before creating or copying `spec.md`, read any existing target specification that is absent from `SPEC_CONTEXT_FILES`, append it to that inventory, and treat it as the editable baseline. Classify every peer specification and every supporting artifact as read-only context. If the requested feature conflicts materially with any discovered source, capture the conflict explicitly and use a `[NEEDS CLARIFICATION: ...]` marker when no safe default exists.
 
 ## Outline
 
@@ -126,16 +136,18 @@ Given that feature description, do this:
 
 4. Load the resolved active `spec-template` file to understand required sections.
 
-5. **IF EXISTS**: Load `.specify/memory/constitution.md` for project principles and governance constraints.
+5. **IF PRESENT IN `SUPPORT_CONTEXT_FILES`**: Apply `.specify/memory/constitution.md` as the project's governance constraints.
 
 6. Follow this execution flow:
     1. Parse user description from arguments
        If empty: ERROR "No feature description provided"
-    2. Reconcile the requested feature with `SPEC_CONTEXT_FILES`
+    2. Reconcile the requested feature with `SPEC_CONTEXT_FILES` and `SUPPORT_CONTEXT_FILES`
        - Reuse canonical terms and compatible requirements
        - Record relevant peer specifications and their dependencies, overlaps, or conflicts in the target specification
+       - Record relevant supporting artifacts and any decisions, dependencies, drift, or conflicts they expose
        - Do not import unrelated user stories merely because another specification contains them
-       - Do not use directory numbering or recency as an authority rule
+       - Do not promote implementation details from contracts, plans, tasks, or architecture records into requirements unless they express an externally observable constraint
+       - Apply the source roles defined in Repository Knowledge Context when evidence disagrees
     3. Extract key concepts from description
        Identify: actors, actions, data, constraints
     4. For unclear aspects:
@@ -188,8 +200,9 @@ Given that feature description, do this:
       - [ ] Edge cases are identified
       - [ ] Scope is clearly bounded
       - [ ] Dependencies and assumptions identified
-      - [ ] All discovered existing specifications were reviewed
-      - [ ] Relevant overlaps, dependencies, and conflicts with existing specifications are captured
+      - [ ] All discovered canonical specifications were reviewed
+      - [ ] All discovered supporting repository artifacts were reviewed
+      - [ ] Relevant overlaps, dependencies, drift, and conflicts across discovered sources are captured
 
       ## Feature Readiness
 
@@ -294,9 +307,10 @@ Check if `.specify/extensions.yml` exists in the project root.
 Report completion to the user with:
 - `SPECIFY_FEATURE_DIRECTORY` — the feature directory path
 - `SPEC_FILE` — the spec file path
-- `SPEC_CONTEXT_FILES` — count and paths of all existing specifications loaded as context
+- `SPEC_CONTEXT_FILES` — count and paths of all canonical specifications loaded as context
+- `SUPPORT_CONTEXT_FILES` — count and paths of all supporting repository artifacts loaded as context
 - Checklist results summary
-- Any cross-specification dependencies or conflicts found
+- Any cross-source dependencies, drift, or conflicts found
 - Readiness for the next phase (`/speckit-clarify` or `/speckit-plan`)
 
 **NOTE:** Branch creation is handled by the `before_specify` hook (git extension). Spec directory and file creation are always handled by this core command.
@@ -366,5 +380,6 @@ Success criteria must be:
 
 - [ ] Specification written to `SPEC_FILE` and validated against quality checklist
 - [ ] Every file in `SPEC_CONTEXT_FILES` was read and relevant cross-specification relationships were captured
+- [ ] Every file in `SUPPORT_CONTEXT_FILES` was read and relevant supporting constraints, decisions, drift, and relationships were captured
 - [ ] Extension hooks dispatched or skipped according to the rules in Mandatory Post-Execution Hooks above
-- [ ] Completion reported to user with feature directory, spec file path, and checklist results
+- [ ] Completion reported to user with feature directory, spec file path, both context inventories, and checklist results

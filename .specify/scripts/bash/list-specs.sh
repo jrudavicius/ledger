@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-# Discover every feature specification in the repository.
-# This command is intentionally independent of the active feature pointer.
+# Discover every feature specification and every repository knowledge artifact
+# that can inform a specification. This command is intentionally independent of
+# the active feature pointer.
 
 set -e
 set -o pipefail
@@ -17,11 +18,19 @@ for arg in "$@"; do
             cat <<'EOF'
 Usage: list-specs.sh [--json]
 
-Recursively lists every regular file named exactly spec.md under specs/.
-Results are sorted by path and do not depend on .specify/feature.json.
+Recursively lists canonical specifications and their complete supporting context.
+Canonical specifications are regular files named exactly spec.md under specs/.
+Supporting context includes:
+  - every other regular file under specs/
+  - every regular file under contexts/, docs/, and .specify/memory/
+  - documentation files elsewhere in the repository
+
+Results are deduplicated, sorted by path, and do not depend on
+.specify/feature.json. Tooling, dependencies, and generated output directories
+are excluded from the repository-wide documentation scan.
 
 OPTIONS:
-  --json    Emit {"SPEC_FILES":[...]} instead of text output
+  --json    Emit {"SPEC_FILES":[...],"SUPPORT_FILES":[...]} instead of text output
   --help    Show this help
 EOF
             exit 0
@@ -39,6 +48,7 @@ source "$SCRIPT_DIR/common.sh"
 REPO_ROOT=$(get_repo_root) || exit 1
 SPECS_DIR="$REPO_ROOT/specs"
 spec_files=()
+support_files=()
 
 if [[ -d "$SPECS_DIR" ]]; then
     spec_output=""
@@ -52,28 +62,92 @@ if [[ -d "$SPECS_DIR" ]]; then
     done <<< "$spec_output"
 fi
 
-if $JSON_MODE; then
-    if has_jq; then
-        if [[ ${#spec_files[@]} -eq 0 ]]; then
-            jq -cn '{SPEC_FILES:[]}'
-        else
-            json_specs=$(printf '%s\n' "${spec_files[@]}" | jq -R . | jq -s .)
-            jq -cn --argjson specs "$json_specs" '{SPEC_FILES:$specs}'
-        fi
-    else
-        if [[ ${#spec_files[@]} -eq 0 ]]; then
-            json_specs="[]"
-        else
-            json_specs=$(for spec_file in "${spec_files[@]}"; do
-                printf '"%s",' "$(json_escape "$spec_file")"
-            done)
-            json_specs="[${json_specs%,}]"
-        fi
-        printf '{"SPEC_FILES":%s}\n' "$json_specs"
+emit_support_candidates() {
+    local context_dir
+
+    # Feature directories may contain contracts, checklists, research, plans,
+    # data models, and other artifacts whose constraints must not be lost.
+    if [[ -d "$SPECS_DIR" ]]; then
+        find "$SPECS_DIR" -type f -print
     fi
+
+    # These are the project's conventional homes for domain knowledge and
+    # governance. Include every file so non-Markdown contracts and diagrams are
+    # visible to the specification workflow too.
+    for context_dir in "$REPO_ROOT/contexts" "$REPO_ROOT/docs" "$REPO_ROOT/.specify/memory"; do
+        if [[ -d "$context_dir" ]]; then
+            find "$context_dir" -type f -print
+        fi
+    done
+
+    # Also find authored documentation outside the conventional roots. Prune
+    # tool configuration, dependencies, caches, and generated output so their
+    # bundled documentation cannot masquerade as project knowledge.
+    find "$REPO_ROOT" \
+        \( -type d \( \
+            -name '.git' -o \
+            -name '.agents' -o \
+            -name '.codex' -o \
+            -name '.specify' -o \
+            -name 'node_modules' -o \
+            -name 'vendor' -o \
+            -name 'dist' -o \
+            -name 'build' -o \
+            -name 'coverage' -o \
+            -name '.cache' -o \
+            -name '.venv' \
+        \) -prune \) -o \
+        \( -type f \( \
+            -iname '*.md' -o \
+            -iname '*.mdx' -o \
+            -iname '*.rst' -o \
+            -iname '*.adoc' -o \
+            -iname '*.txt' \
+        \) -print \)
+}
+
+support_output=""
+if ! support_output=$(emit_support_candidates | LC_ALL=C sort -u); then
+    echo "ERROR: Failed to discover supporting specification context under $REPO_ROOT" >&2
+    exit 1
+fi
+
+is_canonical_spec() {
+    local candidate="$1"
+    local spec_file
+    for spec_file in "${spec_files[@]}"; do
+        [[ "$candidate" == "$spec_file" ]] && return 0
+    done
+    return 1
+}
+
+while IFS= read -r support_file; do
+    [[ -n "$support_file" ]] || continue
+    if ! is_canonical_spec "$support_file"; then
+        support_files+=("$support_file")
+    fi
+done <<< "$support_output"
+
+json_array() {
+    local item
+    local json_items=""
+    for item in "$@"; do
+        json_items="${json_items}\"$(json_escape "$item")\","
+    done
+    printf '[%s]' "${json_items%,}"
+}
+
+if $JSON_MODE; then
+    json_specs=$(json_array "${spec_files[@]}")
+    json_support=$(json_array "${support_files[@]}")
+    printf '{"SPEC_FILES":%s,"SUPPORT_FILES":%s}\n' "$json_specs" "$json_support"
 else
     echo "SPEC_FILES:"
     for spec_file in "${spec_files[@]}"; do
         printf '  %s\n' "$spec_file"
+    done
+    echo "SUPPORT_FILES:"
+    for support_file in "${support_files[@]}"; do
+        printf '  %s\n' "$support_file"
     done
 fi

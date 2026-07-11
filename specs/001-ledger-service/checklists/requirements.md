@@ -21,6 +21,9 @@
 - [x] Edge cases are identified
 - [x] Scope is clearly bounded
 - [x] Dependencies and assumptions identified
+- [x] All discovered canonical specifications were reviewed
+- [x] All discovered supporting repository artifacts were reviewed
+- [x] Relevant overlaps, dependencies, drift, and conflicts across discovered sources are captured
 
 ## Feature Readiness
 
@@ -31,7 +34,11 @@
 
 ## Notes
 
-- Validation repeated after adding Action Records, State Change Records, Audit Trail search, and operator Command Requests; no blocking issues found.
-- Accepted, rejected, read-only, replayed, automated, approval-gated, stale, cancelled, and failed paths have explicit expected audit behavior.
-- CQRS and Event Sourcing are recorded as an architecture decision in `docs/adr/0009-use-cqrs-and-event-sourced-write-models.md`; this specification contains only their observable consistency, durability, and rebuild requirements.
+- Validation repeated after reading 1 canonical specification and all 86 discovered supporting artifacts; no blocking quality issues or unresolved clarification markers remain.
+- The active specification now reconciles canonical Accounts, Journal, Balances, Controls, Products, Customers, Payment Instruments, shared-language, Context Map, constitution, ADR, model, feature-brief, audit-model, checklist, and contract inputs.
+- Accepted, rejected, read-only, replayed, automated, approval-gated, stale, cancelled, expired, failed, bitemporal, period-close, prospective-bound, replacement, resolution, and correction paths have explicit expected behavior.
+- No read-only peer specification exists. Cross-context dependencies and supporting-artifact drift are recorded in `spec.md` under **Dependencies and Cross-Source Reconciliation**.
+- The candidate contract remains read-only supporting evidence and trails canonical requirements in Command Task terminology and union coverage, directional-capacity terminology, Known Through support, and Recorded At ordering language; planning must reconcile it before implementation.
+- The approved Transfer Limits brief remains scoped to a separate future Specify invocation and was not merged into this feature beyond the already-canonical generic Usage Limit model.
+- Protocol and persistence choices remain in contracts and accepted decisions; the specification states observable admission, consistency, durability, ordering, and rebuild outcomes without selecting storage or deployment mechanisms.
 - The specification contains no `[NEEDS CLARIFICATION]` markers or unresolved template placeholders.
